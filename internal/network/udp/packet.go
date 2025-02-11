@@ -2,10 +2,20 @@ package udp
 
 import "encoding/binary"
 
+const (
+	ackIDPacketSize  = 4
+	sequentialIDSize = 4
+	dataSize         = 1024
+)
+
 type packet struct {
 	AckID        uint32 // 4 bytes
 	SequentialID uint32 // 4 bytes
 	Data         []byte // 1024 bytes
+}
+
+func defaultPacketSize() int {
+	return ackIDPacketSize + sequentialIDSize + dataSize
 }
 
 func extractPacketFromBuffer(buf []byte, totalBytes int) packet {

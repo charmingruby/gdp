@@ -44,34 +44,34 @@ func (s *Server) Listen() error {
 }
 
 func (s *Server) Read() {
-	pkgBuffer := make([]byte, 1024+8)
+	pktBuffer := make([]byte, defaultPacketSize())
 	expectedSequentialID := uint32(0)
 
 	for {
-		totalBytes, clientAddr, err := s.Conn.ReadFromUDP(pkgBuffer)
+		totalBytes, clientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
 		if err != nil {
 			continue
 		}
 
-		pkg := extractPacketFromBuffer(pkgBuffer, totalBytes)
+		pkt := extractPacketFromBuffer(pktBuffer, totalBytes)
 
 		if isOcurrence := isAPackageLossOccurence(s.threshold.PackageLoss); isOcurrence {
-			fmt.Printf("Package loss ocurred for package with sequential ID %d\n", pkg.SequentialID)
+			fmt.Printf("Package loss ocurred for package with sequential ID %d\n", pkt.SequentialID)
 			continue
 		}
 
-		isPackageOrdered := pkg.SequentialID == expectedSequentialID
+		isPackageOrdered := pkt.SequentialID == expectedSequentialID
 		if isPackageOrdered {
-			fmt.Printf("Received package with sequential ID %d\n", pkg.SequentialID)
+			fmt.Printf("Received package with sequential ID %d\n", pkt.SequentialID)
 			expectedSequentialID++
 		} else {
-			fmt.Printf("Received UNORDERED package with sequential ID %d\n", pkg.SequentialID)
+			fmt.Printf("Received UNORDERED package with sequential ID %d\n", pkt.SequentialID)
 		}
 
 		if err := dispatchAck(ackInput{
 			conn:                 s.Conn,
 			clientAddr:           clientAddr,
-			pkg:                  pkg,
+			pkt:                  pkt,
 			expectedSequentialID: expectedSequentialID,
 		}); err != nil {
 			fmt.Println(err.Error())
