@@ -53,7 +53,7 @@ func (s *Server) Read() {
 			continue
 		}
 
-		pkg := extractPackageFromBuffer(pkgBuffer, totalBytes)
+		pkg := extractPacketFromBuffer(pkgBuffer, totalBytes)
 
 		if isOcurrence := isAPackageLossOccurence(s.threshold.PackageLoss); isOcurrence {
 			fmt.Printf("Package loss ocurred for package with sequential ID %d\n", pkg.SequentialID)

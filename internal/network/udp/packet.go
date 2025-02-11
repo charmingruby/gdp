@@ -8,7 +8,7 @@ type packet struct {
 	Data         []byte // 1024 bytes
 }
 
-func extractPackageFromBuffer(buf []byte, totalBytes int) packet {
+func extractPacketFromBuffer(buf []byte, totalBytes int) packet {
 	return packet{
 		AckID:        binary.BigEndian.Uint32(buf[0:4]),
 		SequentialID: binary.BigEndian.Uint32(buf[4:8]),
