@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/charmingruby/gdp/config"
 	"github.com/charmingruby/gdp/internal/network/udp"
 )
@@ -15,16 +17,21 @@ func main() {
 
 	server, err := udp.NewServer(udp.ServerInput{
 		Port: serverCfg.Port,
+		Threshold: udp.Threshold{
+			PackageLoss: serverCfg.Threshold.PackageLoss,
+		},
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	conn, err := server.Start()
-	if err != nil {
+	if err := server.Listen(); err != nil {
 		panic(err)
 	}
-	defer conn.Close()
+	defer server.Conn.Close()
 
-	println("UDP server is running on port", serverCfg.Port)
+	fmt.Println("Server is listening on port", serverCfg.Port)
+	fmt.Println("Server is ready to receive data...")
+
+	server.Read()
 }
