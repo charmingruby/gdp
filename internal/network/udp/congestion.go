@@ -2,7 +2,7 @@ package udp
 
 import "math/rand/v2"
 
-type Threshold struct {
+type CongestionThreshold struct {
 	PackageLoss float32
 }
 

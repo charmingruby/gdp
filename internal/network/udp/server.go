@@ -7,13 +7,13 @@ import (
 
 type ServerInput struct {
 	Port      int
-	Threshold Threshold
+	Threshold CongestionThreshold
 }
 
 type Server struct {
 	Conn *net.UDPConn
 
-	threshold Threshold
+	threshold CongestionThreshold
 	addr      *net.UDPAddr
 }
 
@@ -44,7 +44,7 @@ func (s *Server) Listen() error {
 }
 
 func (s *Server) Read() {
-	pktBuffer := make([]byte, defaultPacketSize())
+	pktBuffer := make([]byte, packetSizeWithHeaders())
 	expectedSequentialID := uint32(0)
 
 	for {

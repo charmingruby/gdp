@@ -16,19 +16,6 @@ type Config struct {
 	Server ServerConfig `yaml:"server"`
 }
 
-type ClientConfig struct {
-	ServerPort int `yaml:"server-port"`
-}
-
-type ServerConfig struct {
-	Port      int             `yaml:"port"`
-	Threshold ThresholdConfig `yaml:"thresholds"`
-}
-
-type ThresholdConfig struct {
-	PackageLoss float32 `yaml:"package-loss"`
-}
-
 func New() (*Config, error) {
 	configFileExists := validateExistence()
 	if !configFileExists {

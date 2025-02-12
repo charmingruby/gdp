@@ -14,7 +14,11 @@ type packet struct {
 	Data         []byte // 1024 bytes
 }
 
-func defaultPacketSize() int {
+func packetSize() int {
+	return dataSize
+}
+
+func packetSizeWithHeaders() int {
 	return ackIDPacketSize + sequentialIDSize + dataSize
 }
 

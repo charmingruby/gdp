@@ -17,8 +17,8 @@ func main() {
 
 	server, err := udp.NewServer(udp.ServerInput{
 		Port: serverCfg.Port,
-		Threshold: udp.Threshold{
-			PackageLoss: serverCfg.Threshold.PackageLoss,
+		Threshold: udp.CongestionThreshold{
+			PackageLoss: serverCfg.CongestionThreshold.PackageLoss,
 		},
 	})
 	if err != nil {
