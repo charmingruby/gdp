@@ -3,6 +3,8 @@ package udp
 import (
 	"fmt"
 	"net"
+
+	"github.com/charmingruby/gdp/internal/network/udp/packet"
 )
 
 type ServerInput struct {
@@ -43,36 +45,62 @@ func (s *Server) Listen() error {
 	return nil
 }
 
-func (s *Server) Read() {
-	pktBuffer := make([]byte, packetSizeWithHeaders())
-	expectedSequentialID := uint32(0)
+func (s *Server) Read() error {
+	var serverSequentialID = uint32(0)
+	var clientSequentialID = uint32(0)
+	var clientAddr *net.UDPAddr = nil
+	var isSync = false
 
 	for {
-		totalBytes, clientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
-		if err != nil {
-			continue
-		}
+		if !isSync {
+			fmt.Printf("waiting for sync packet from client...\n")
 
-		pkt := extractPacketFromBuffer(pktBuffer, totalBytes)
+			pktBuffer := make([]byte, packet.AckPacketSizeWithHeaders())
 
-		if isOcurrence := isAPackageLossOccurence(s.threshold.PackageLoss); isOcurrence {
-			fmt.Printf("Package loss ocurred for package with sequential ID %d\n", pkt.SequentialID)
-			continue
-		}
+			totalBytes, incomeClientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
+			if err != nil {
+				return fmt.Errorf("unable to read syncronize packet from client: %s", err.Error())
+			}
 
-		isPackageOrdered := pkt.SequentialID == expectedSequentialID
-		if isPackageOrdered {
-			fmt.Printf("Received package with sequential ID %d\n", pkt.SequentialID)
-			expectedSequentialID++
+			syncPkt := packet.ExtractSyncPacketFromBuffer(pktBuffer, totalBytes)
+
+			fmt.Printf("received syncronize packet with sequentialID=%d\n", syncPkt.SequentialID)
+
+			clientSequentialID = syncPkt.SequentialID
+			clientAddr = incomeClientAddr
+			isSync = true
 		} else {
-			fmt.Printf("Received UNORDERED package with sequential ID %d\n", pkt.SequentialID)
+			pktBuffer := make([]byte, packet.AckPacketSizeWithHeaders())
+
+			totalBytes, incomeClientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
+			if err != nil {
+				continue
+			}
+
+			if clientAddr == nil {
+				clientAddr = incomeClientAddr
+			}
+
+			pkt := packet.ExtractSyncPacketFromBuffer(pktBuffer, totalBytes)
+
+			if isOcurrence := isAPackageLossOccurence(s.threshold.PackageLoss); isOcurrence {
+				fmt.Printf("package loss ocurred for package with sequential ID %d\n", pkt.SequentialID)
+				continue
+			}
+
+			clientSequentialID = pkt.SequentialID + 1
 		}
 
-		if err := dispatchAck(ackInput{
-			conn:                 s.Conn,
-			clientAddr:           clientAddr,
-			pkt:                  pkt,
-			expectedSequentialID: expectedSequentialID,
+		pkt := packet.AckSync{
+			AckID:        clientSequentialID + 1,
+			SequentialID: serverSequentialID,
+			Data:         make([]byte, packet.DataSize()),
+		}
+
+		if err := packet.DispatchAckSync(packet.AckSyncInput{
+			Conn:       s.Conn,
+			ClientAddr: clientAddr,
+			Pkt:        pkt,
 		}); err != nil {
 			fmt.Println(err.Error())
 		}

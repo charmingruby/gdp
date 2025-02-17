@@ -1,11 +1,11 @@
 package udp
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/charmingruby/gdp/internal/network/udp/packet"
 )
 
 type ClientInput struct {
@@ -46,88 +46,110 @@ func (c *Client) Run() error {
 }
 
 func (c *Client) Dispatch() error {
-	var base uint32 = 0
-	var nextSequentialID uint32 = 0
-	var cwnd int = c.clientThreshold.InitialWindowSize
-	var ssthresh int = c.clientThreshold.InitialSshthresh
-	var dupAckCount int = 0
-	var lastAck uint32 = 0
+	var baseSequentialID uint32 = 10
 
-	for i := 0; i < 2; i++ {
-		var window []packet
-		for nextSequentialID < base+uint32(cwnd) {
-			data := make([]byte, packetSize())
-			rand.Read(data)
-			packet := packet{SequentialID: nextSequentialID, Data: data}
-			window = append(window, packet)
-			nextSequentialID++
+	c.synchronize(baseSequentialID)
+
+	for {
+		buf := make([]byte, packet.AckSyncPacketSizeWithHeaders())
+		c.Conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+
+		_, err := c.Conn.Read(buf)
+		if err != nil {
+			fmt.Println("error receiving ACK:", err)
 		}
 
-		for _, pkt := range window {
-			buf := make([]byte, 8+len(pkt.Data))
-			binary.BigEndian.PutUint32(buf[0:4], pkt.SequentialID)
-			binary.BigEndian.PutUint32(buf[4:8], pkt.AckID)
-			copy(buf[8:], pkt.Data)
-			_, err := c.Conn.Write(buf)
-			if err != nil {
-				return fmt.Errorf("unable to send packet: %s", err.Error())
-			}
+		pkt := packet.ExtractAckSyncPacketFromBuffer(buf, packet.AckSyncPacketSizeWithHeaders())
 
-			fmt.Printf("Packet sent: SequentialID=%d, cwnd=%d, ssthresh=%d\n", pkt.SequentialID, cwnd, ssthresh)
-		}
-
-		timeout := time.Duration(c.clientThreshold.TimeoutInSeconds) * time.Second
-
-		ackChan := make(chan uint32)
-		go func() {
-			buf := make([]byte, 8)
-			c.Conn.SetReadDeadline(time.Now().Add(timeout))
-			_, err := c.Conn.Read(buf)
-			if err != nil {
-				fmt.Println("Error receiving ACK:", err)
-				return
-			}
-			ackNum := binary.BigEndian.Uint32(buf[4:8])
-			ackChan <- ackNum
-		}()
-
-		select {
-		case ackNum := <-ackChan:
-			fmt.Printf("ACK received: %d\n", ackNum)
-
-			if ackNum == lastAck {
-				dupAckCount++
-				if dupAckCount == 3 {
-					fmt.Println("Fast Retransmit: 3 duplicated ACKs  detected")
-					ssthresh = cwnd / 2
-					cwnd = ssthresh + 3
-					base = ackNum + 1
-					nextSequentialID = base
-					dupAckCount = 0
-					fmt.Printf("Fast Retransmit: cwnd=%d, ssthresh=%d\n", cwnd, ssthresh)
-				}
-			} else {
-				dupAckCount = 0
-				if cwnd < ssthresh {
-					// Slow Start
-					cwnd *= 2
-				} else {
-					// Congestion Avoidance
-					cwnd++
-				}
-				base = ackNum + 1
-			}
-			lastAck = ackNum
-
-		case <-time.After(timeout):
-			fmt.Println("Timeout detected")
-			ssthresh = cwnd / 2
-			cwnd = int(c.clientThreshold.InitialWindowSize)
-			base = lastAck + 1
-			nextSequentialID = base
-			fmt.Printf("Timeout: cwnd=%d, ssthresh=%d\n", cwnd, ssthresh)
-		}
+		fmt.Printf("packet received: ack=%d\n", pkt.AckID)
 	}
+
+	// for {
+
+	// 	buf := make([]byte, 8+len(pkt.Data))
+	// 	binary.BigEndian.PutUint32(buf[0:4], pkt.SequentialID)
+	// 	binary.BigEndian.PutUint32(buf[4:8], pkt.AckID)
+	// 	copy(buf[8:], pkt.Data)
+
+	// 	_, err := c.Conn.Write(buf)
+	// 	if err != nil {
+	// 		return fmt.Errorf("unable to send packet: %s", err.Error())
+	// 	}
+
+	// 	fmt.Printf("Packet sent: SequentialID=%d, cwnd=%d, ssthresh=%d\n", pkt.SequentialID, cwnd, ssthresh)
+
+	// 	timeout := time.Duration(c.clientThreshold.TimeoutInSeconds) * time.Second
+
+	// 	ackChan := make(chan uint32)
+	// 	go func() {
+	// 		buf := make([]byte, 8)
+	// 		c.Conn.SetReadDeadline(time.Now().Add(timeout))
+	// 		_, err := c.Conn.Read(buf)
+	// 		if err != nil {
+	// 			fmt.Println("Error receiving ACK:", err)
+	// 			return
+	// 		}
+	// 		ackNum := binary.BigEndian.Uint32(buf[4:8])
+	// 		ackChan <- ackNum
+	// 	}()
+
+	// 	select {
+	// 	case ackNum := <-ackChan:
+	// 		fmt.Printf("ACK received: %d\n", ackNum)
+
+	// 		if ackNum == lastAck {
+	// 			dupAckCount++
+	// 			if dupAckCount == 3 {
+	// 				fmt.Println("Fast Retransmit: 3 duplicated ACKs  detected")
+	// 				ssthresh = cwnd / 2
+	// 				cwnd = ssthresh + 3
+	// 				base = ackNum + 1
+	// 				nextSequentialID = base
+	// 				dupAckCount = 0
+	// 				fmt.Printf("Fast Retransmit: cwnd=%d, ssthresh=%d\n", cwnd, ssthresh)
+	// 			}
+	// 		} else {
+	// 			dupAckCount = 0
+	// 			if cwnd < ssthresh {
+	// 				// Slow Start
+	// 				cwnd *= 2
+	// 			} else {
+	// 				// Congestion Avoidance
+	// 				cwnd++
+	// 			}
+	// 			base = ackNum + 1
+	// 		}
+	// 		lastAck = ackNum
+
+	// 	case <-time.After(timeout):
+	// 		fmt.Println("Timeout detected")
+	// 		ssthresh = cwnd / 2
+	// 		cwnd = int(c.clientThreshold.InitialWindowSize)
+	// 		base = lastAck + 1
+	// 		nextSequentialID = base
+	// 		fmt.Printf("Timeout: cwnd=%d, ssthresh=%d\n", cwnd, ssthresh)
+	// 	}
+	// }
+
+	return nil
+}
+
+func (c *Client) synchronize(baseSequentialID uint32) error {
+	buf := make([]byte, 1024)
+
+	syncPkt := packet.Sync{
+		SequentialID: baseSequentialID,
+		Data:         buf,
+	}
+
+	if err := packet.DispatchSync(packet.SyncInput{
+		Conn: c.Conn,
+		Pkt:  syncPkt,
+	}); err != nil {
+		return fmt.Errorf("unable to send sync packet: %s", err.Error())
+	}
+
+	fmt.Printf("sent sync packet with sequentialID=%d\n", syncPkt.SequentialID)
 
 	return nil
 }
