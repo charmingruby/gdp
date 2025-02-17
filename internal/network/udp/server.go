@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/charmingruby/gdp/internal/network/udp/congestion"
 	"github.com/charmingruby/gdp/internal/network/udp/packet"
 )
+
+type CongestionThreshold struct {
+	PackageLoss float32
+}
 
 type ServerInput struct {
 	Port      int
@@ -15,8 +20,8 @@ type ServerInput struct {
 type Server struct {
 	Conn *net.UDPConn
 
-	threshold CongestionThreshold
-	addr      *net.UDPAddr
+	congestion congestion.Congestion
+	addr       *net.UDPAddr
 }
 
 func NewServer(in ServerInput) (*Server, error) {
@@ -29,8 +34,8 @@ func NewServer(in ServerInput) (*Server, error) {
 	}
 
 	return &Server{
-		addr:      addr,
-		threshold: in.Threshold,
+		addr:       addr,
+		congestion: congestion.Congestion(in.Threshold),
 	}, nil
 }
 
@@ -83,7 +88,7 @@ func (s *Server) Read() error {
 
 			pkt := packet.ExtractSyncPacketFromBuffer(pktBuffer, totalBytes)
 
-			if isOcurrence := isAPackageLossOccurence(s.threshold.PackageLoss); isOcurrence {
+			if isOcurrence := s.congestion.IsAPackageLossOccurence(s.congestion.PackageLoss); isOcurrence {
 				fmt.Printf("package loss ocurred for package with sequential ID %d\n", pkt.SequentialID)
 				continue
 			}
