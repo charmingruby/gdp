@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmingruby/gdp/config"
 	"github.com/charmingruby/gdp/internal/network/udp"
+	"github.com/charmingruby/gdp/internal/shared/logger"
 )
 
 func main() {
@@ -30,8 +31,9 @@ func main() {
 	}
 	defer server.Conn.Close()
 
-	fmt.Println("Server is listening on port", serverCfg.Port)
-	fmt.Println("Server is ready to receive data...")
+	logger.Config(fmt.Sprintf("Server is listening on port %d...", serverCfg.Port))
 
-	server.Read()
+	if err := server.Read(); err != nil {
+		panic(err)
+	}
 }

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/charmingruby/gdp/config"
 	"github.com/charmingruby/gdp/internal/network/udp"
+	"github.com/charmingruby/gdp/internal/shared/logger"
 )
 
 func main() {
@@ -28,8 +31,7 @@ func main() {
 	}
 	defer client.Conn.Close()
 
-	println("Client is connected to the server on port", clientCfg.ServerPort)
-	println("Client is ready to communicate...")
+	logger.Config(fmt.Sprintf("Client is connected to the server on port %d...", clientCfg.ServerPort))
 
 	client.Dispatch()
 }

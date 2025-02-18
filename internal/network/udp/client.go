@@ -3,9 +3,9 @@ package udp
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/charmingruby/gdp/internal/network/udp/packet"
+	"github.com/charmingruby/gdp/internal/shared/logger"
 )
 
 type ClientInput struct {
@@ -48,21 +48,16 @@ func (c *Client) Run() error {
 func (c *Client) Dispatch() error {
 	var baseSequentialID uint32 = 10
 
-	c.synchronize(baseSequentialID)
+	logger.Header("Synchronization Process")
+	logger.OpenBracket()
 
-	for {
-		buf := make([]byte, packet.AckSyncPacketSizeWithHeaders())
-		c.Conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
-
-		_, err := c.Conn.Read(buf)
-		if err != nil {
-			fmt.Println("error receiving ACK:", err)
-		}
-
-		pkt := packet.ExtractAckSyncPacketFromBuffer(buf, packet.AckSyncPacketSizeWithHeaders())
-
-		fmt.Printf("packet received: ack=%d\n", pkt.AckID)
+	_, err := c.sync(baseSequentialID)
+	if err != nil {
+		return err
 	}
+
+	logger.CloseBracket()
+	logger.Divider()
 
 	// for {
 
@@ -76,7 +71,7 @@ func (c *Client) Dispatch() error {
 	// 		return fmt.Errorf("unable to send packet: %s", err.Error())
 	// 	}
 
-	// 	fmt.Printf("Packet sent: SequentialID=%d, cwnd=%d, ssthresh=%d\n", pkt.SequentialID, cwnd, ssthresh)
+	// 	fmt.Printf("Packet sent: SequentialID=%d, cwnd=%d, ssthresh=%d", pkt.SequentialID, cwnd, ssthresh)
 
 	// 	timeout := time.Duration(c.clientThreshold.TimeoutInSeconds) * time.Second
 
@@ -95,7 +90,7 @@ func (c *Client) Dispatch() error {
 
 	// 	select {
 	// 	case ackNum := <-ackChan:
-	// 		fmt.Printf("ACK received: %d\n", ackNum)
+	// 		fmt.Printf("ACK received: %d", ackNum)
 
 	// 		if ackNum == lastAck {
 	// 			dupAckCount++
@@ -106,7 +101,7 @@ func (c *Client) Dispatch() error {
 	// 				base = ackNum + 1
 	// 				nextSequentialID = base
 	// 				dupAckCount = 0
-	// 				fmt.Printf("Fast Retransmit: cwnd=%d, ssthresh=%d\n", cwnd, ssthresh)
+	// 				fmt.Printf("Fast Retransmit: cwnd=%d, ssthresh=%d", cwnd, ssthresh)
 	// 			}
 	// 		} else {
 	// 			dupAckCount = 0
@@ -127,29 +122,59 @@ func (c *Client) Dispatch() error {
 	// 		cwnd = int(c.clientThreshold.InitialWindowSize)
 	// 		base = lastAck + 1
 	// 		nextSequentialID = base
-	// 		fmt.Printf("Timeout: cwnd=%d, ssthresh=%d\n", cwnd, ssthresh)
+	// 		fmt.Printf("Timeout: cwnd=%d, ssthresh=%d", cwnd, ssthresh)
 	// 	}
 	// }
 
 	return nil
 }
 
-func (c *Client) synchronize(baseSequentialID uint32) error {
-	buf := make([]byte, 1024)
-
+func (c *Client) sync(baseSequentialID uint32) (packet.Ack, error) {
+	syncPktBuf := make([]byte, packet.SyncPacketSizeWithHeaders())
 	syncPkt := packet.Sync{
 		SequentialID: baseSequentialID,
-		Data:         buf,
+		Data:         syncPktBuf,
 	}
 
 	if err := packet.DispatchSync(packet.SyncInput{
 		Conn: c.Conn,
 		Pkt:  syncPkt,
 	}); err != nil {
-		return fmt.Errorf("unable to send sync packet: %s", err.Error())
+		return packet.Ack{}, fmt.Errorf("unable to send sync packet: %s", err.Error())
 	}
 
-	fmt.Printf("sent sync packet with sequentialID=%d\n", syncPkt.SequentialID)
+	logger.Response(
+		fmt.Sprintf("sent sync packet with sequentialID=%d", syncPkt.SequentialID),
+	)
 
-	return nil
+	ackSyncReceiverBuf := make([]byte, packet.AckSyncPacketSizeWithHeaders())
+	_, err := c.Conn.Read(ackSyncReceiverBuf)
+	if err != nil {
+		return packet.Ack{}, fmt.Errorf("error receiving sync-ack packet: %s", err.Error())
+	}
+
+	ackSyncPkt := packet.ExtractAckSyncPacketFromBuffer(ackSyncReceiverBuf, packet.AckSyncPacketSizeWithHeaders())
+
+	logger.Response(
+		fmt.Sprintf("ack-sync packet received: ack=%d", ackSyncPkt.AckID),
+	)
+
+	ackPktBuf := make([]byte, packet.AckPacketSizeWithHeaders())
+	ackPkt := packet.Ack{
+		AckID: ackSyncPkt.SequentialID + 1,
+		Data:  ackPktBuf,
+	}
+
+	if err := packet.DispatchAck(packet.AckInput{
+		Conn: c.Conn,
+		Pkt:  ackPkt,
+	}); err != nil {
+		return packet.Ack{}, fmt.Errorf("unable to send last synchronization packet: %s", err.Error())
+	}
+
+	logger.Response(
+		fmt.Sprintf("sent last ack packet with ack=%d", ackPkt.AckID),
+	)
+
+	return ackPkt, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmingruby/gdp/internal/network/udp/congestion"
 	"github.com/charmingruby/gdp/internal/network/udp/packet"
+	"github.com/charmingruby/gdp/internal/shared/logger"
 )
 
 type CongestionThreshold struct {
@@ -18,17 +19,13 @@ type ServerInput struct {
 }
 
 type Server struct {
-	Conn *net.UDPConn
-
-	congestion congestion.Congestion
+	Conn       *net.UDPConn
 	addr       *net.UDPAddr
+	congestion congestion.Congestion
 }
 
 func NewServer(in ServerInput) (*Server, error) {
-	addr, err := net.ResolveUDPAddr(
-		"udp",
-		fmt.Sprintf(":%d", in.Port),
-	)
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", in.Port))
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve UDP address: %s", err.Error())
 	}
@@ -52,62 +49,65 @@ func (s *Server) Listen() error {
 
 func (s *Server) Read() error {
 	var serverSequentialID = uint32(0)
-	var clientSequentialID = uint32(0)
-	var clientAddr *net.UDPAddr = nil
-	var isSync = false
 
-	for {
-		if !isSync {
-			fmt.Printf("waiting for sync packet from client...\n")
+	logger.Header("Synchronization Process")
+	logger.OpenBracket()
 
-			pktBuffer := make([]byte, packet.AckPacketSizeWithHeaders())
-
-			totalBytes, incomeClientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
-			if err != nil {
-				return fmt.Errorf("unable to read syncronize packet from client: %s", err.Error())
-			}
-
-			syncPkt := packet.ExtractSyncPacketFromBuffer(pktBuffer, totalBytes)
-
-			fmt.Printf("received syncronize packet with sequentialID=%d\n", syncPkt.SequentialID)
-
-			clientSequentialID = syncPkt.SequentialID
-			clientAddr = incomeClientAddr
-			isSync = true
-		} else {
-			pktBuffer := make([]byte, packet.AckPacketSizeWithHeaders())
-
-			totalBytes, incomeClientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
-			if err != nil {
-				continue
-			}
-
-			if clientAddr == nil {
-				clientAddr = incomeClientAddr
-			}
-
-			pkt := packet.ExtractSyncPacketFromBuffer(pktBuffer, totalBytes)
-
-			if isOcurrence := s.congestion.IsAPackageLossOccurence(s.congestion.PackageLoss); isOcurrence {
-				fmt.Printf("package loss ocurred for package with sequential ID %d\n", pkt.SequentialID)
-				continue
-			}
-
-			clientSequentialID = pkt.SequentialID + 1
-		}
-
-		pkt := packet.AckSync{
-			AckID:        clientSequentialID + 1,
-			SequentialID: serverSequentialID,
-			Data:         make([]byte, packet.DataSize()),
-		}
-
-		if err := packet.DispatchAckSync(packet.AckSyncInput{
-			Conn:       s.Conn,
-			ClientAddr: clientAddr,
-			Pkt:        pkt,
-		}); err != nil {
-			fmt.Println(err.Error())
-		}
+	if err := s.sync(serverSequentialID); err != nil {
+		return err
 	}
+	logger.CloseBracket()
+
+	logger.Divider()
+
+	return nil
+}
+
+func (s *Server) sync(baseSequentialID uint32) error {
+
+	logger.Response("waiting for sync packet from client...")
+
+	pktBuffer := make([]byte, packet.AckSyncPacketSizeWithHeaders())
+	totalBytes, clientAddr, err := s.Conn.ReadFromUDP(pktBuffer)
+	if err != nil {
+		return fmt.Errorf("unable to read synchronize packet from client: %s", err.Error())
+	}
+
+	syncPkt := packet.ExtractSyncPacketFromBuffer(pktBuffer, totalBytes)
+
+	logger.Response(
+		fmt.Sprintf("received synchronize packet with sequentialID=%d", syncPkt.SequentialID),
+	)
+
+	ackSyncPkt := packet.AckSync{
+		AckID:        syncPkt.SequentialID + 1,
+		SequentialID: baseSequentialID,
+		Data:         make([]byte, packet.DataSize()),
+	}
+
+	if err := packet.DispatchAckSync(packet.AckSyncInput{
+		Conn:       s.Conn,
+		ClientAddr: clientAddr,
+		Pkt:        ackSyncPkt,
+	}); err != nil {
+		return fmt.Errorf("unable to send ack-sync packet: %s", err.Error())
+	}
+
+	logger.Response(
+		fmt.Sprintf("sent ack-sync packet with ack=%d, seqID=%d", ackSyncPkt.AckID, ackSyncPkt.SequentialID),
+	)
+
+	pktBuffer = make([]byte, packet.AckSyncPacketSizeWithHeaders())
+	totalBytes, _, err = s.Conn.ReadFromUDP(pktBuffer)
+	if err != nil {
+		return fmt.Errorf("unable to read synchronize packet from client: %s", err.Error())
+	}
+
+	ackPkt := packet.ExtractAckPacketFromBuffer(pktBuffer, totalBytes)
+
+	logger.Response(
+		fmt.Sprintf("received last synchronization ack packet with ack=%d", ackPkt.AckID),
+	)
+
+	return nil
 }

@@ -23,9 +23,8 @@ func ExtractAckPacketFromBuffer(buf []byte, totalBytes int) Ack {
 }
 
 type AckInput struct {
-	Conn       *net.UDPConn
-	ClientAddr *net.UDPAddr
-	Pkt        Ack
+	Conn net.Conn
+	Pkt  Ack
 }
 
 func DispatchAck(in AckInput) error {
@@ -33,7 +32,7 @@ func DispatchAck(in AckInput) error {
 	binary.BigEndian.PutUint32(ackBuffer[0:4], in.Pkt.AckID)
 	copy(ackBuffer[4:], in.Pkt.Data)
 
-	if _, err := in.Conn.WriteToUDP(ackBuffer, in.ClientAddr); err != nil {
+	if _, err := in.Conn.Write(ackBuffer); err != nil {
 		return fmt.Errorf("error dispatching ACK: %s", err.Error())
 	}
 
