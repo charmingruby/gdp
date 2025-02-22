@@ -6,6 +6,10 @@ import (
 	"github.com/charmingruby/gdp/internal/network/udp/client/messaging/packet"
 )
 
+func NewDataAckBuffer() []byte {
+	return make([]byte, packet.DataAckPacketSizeWithHeaders())
+}
+
 func DataAckPacketFromBuffer(buf []byte, totalBytes int) packet.DataAck {
 	return packet.DataAck{
 		AckID:        binary.BigEndian.Uint32(buf[0:4]),

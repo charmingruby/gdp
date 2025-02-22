@@ -70,7 +70,7 @@ func (s *Server) Read() error {
 	logger.Header("Data Transfer Process")
 	logger.OpenBracket()
 
-	s.receiveData()
+	s.receiveData(syncResult.serverSequentialID, syncResult.clientSequentialID)
 
 	logger.CloseBracket()
 

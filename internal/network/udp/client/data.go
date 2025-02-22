@@ -3,19 +3,20 @@ package client
 import (
 	"fmt"
 
+	"github.com/charmingruby/gdp/internal/network/udp/client/messaging/extract"
 	"github.com/charmingruby/gdp/internal/network/udp/client/messaging/packet"
 	"github.com/charmingruby/gdp/pkg/logger"
 )
 
-func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) error {
-	var currentServerSequentialID uint32 = serverSequentialID
-	var currentClientSequentialID uint32 = clientSequentialID
+func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) {
+	var currentServerSequentialID uint32 = serverSequentialID + 1
+	var currentClientSequentialID uint32 = clientSequentialID + 1
 
 	for range c.config.PackageLoadSize {
 		ackPktBuf := make([]byte, packet.AckPacketSizeWithHeaders())
 		ackPkt := packet.DataAck{
-			AckID:        currentServerSequentialID + 1,
-			SequentialID: currentClientSequentialID + 1,
+			AckID:        currentServerSequentialID,
+			SequentialID: currentClientSequentialID,
 			Data:         ackPktBuf,
 		}
 
@@ -23,13 +24,28 @@ func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) error {
 			Conn: c.Conn,
 			Pkt:  ackPkt,
 		}); err != nil {
-			return fmt.Errorf("unable to send last synchronization packet: %s", err.Error())
+			logger.Response(fmt.Sprintf("unable to send last synchronization packet: %s", err.Error()))
+			continue
 		}
 
 		logger.Response(
-			fmt.Sprintf("ack packet with ack=%d, seq=%d", ackPkt.AckID, ackPkt.SequentialID),
+			fmt.Sprintf("sent data ack packet with ack=%d, seq=%d", ackPkt.AckID, ackPkt.SequentialID),
 		)
-	}
 
-	return nil
+		ackBuf := extract.NewAckSyncBuffer()
+		_, err := c.Conn.Read(ackBuf)
+		if err != nil {
+			logger.Response(fmt.Sprintf("error receiving ack packet: %s", err.Error()))
+			continue
+		}
+
+		ackSyncPkt := extract.AckPacketFromBuffer(ackBuf)
+
+		logger.Response(
+			fmt.Sprintf("ack packet received: ack=%d", ackSyncPkt.AckID),
+		)
+
+		currentClientSequentialID++
+		currentServerSequentialID++
+	}
 }
