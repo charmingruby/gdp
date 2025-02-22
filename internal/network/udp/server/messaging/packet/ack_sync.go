@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"github.com/charmingruby/gdp/internal/network/udp/shared/constant"
 )
 
 type AckSync struct {
@@ -13,15 +15,7 @@ type AckSync struct {
 }
 
 func AckSyncPacketSizeWithHeaders() int {
-	return ackIDPacketSize + sequentialIDSize + dataSize
-}
-
-func ExtractAckSyncPacketFromBuffer(buf []byte, totalBytes int) AckSync {
-	return AckSync{
-		AckID:        binary.BigEndian.Uint32(buf[0:4]),
-		SequentialID: binary.BigEndian.Uint32(buf[4:8]),
-		Data:         buf[8:totalBytes],
-	}
+	return constant.ACK_ID_SIZE + constant.SEQUENTIAL_ID_SIZE + constant.DATA_SIZE
 }
 
 type AckSyncInput struct {

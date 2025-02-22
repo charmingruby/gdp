@@ -7,10 +7,8 @@ func OpenBracket() {
 
 func CloseBracket() {
 	highlight("%=v")
-	println()
 }
 
 func Divider() {
-	highlight("%=>--___--=>")
 	println()
 }

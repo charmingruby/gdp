@@ -1,5 +1,6 @@
 client:
   server-port: 8080
+  package-load-size: 10
   client-thresholds:
     timeout-in-seconds: 5
     initial-window-size: 1

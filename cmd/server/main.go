@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/charmingruby/gdp/config"
-	"github.com/charmingruby/gdp/internal/network/udp"
-	"github.com/charmingruby/gdp/internal/shared/logger"
+	"github.com/charmingruby/gdp/internal/network/udp/server"
+	"github.com/charmingruby/gdp/pkg/logger"
 )
 
 func main() {
@@ -16,9 +16,9 @@ func main() {
 
 	serverCfg := cfg.Server
 
-	server, err := udp.NewServer(udp.ServerInput{
+	server, err := server.New(server.ServerInput{
 		Port: serverCfg.Port,
-		Threshold: udp.CongestionThreshold{
+		Threshold: server.CongestionThreshold{
 			PackageLoss: serverCfg.CongestionThreshold.PackageLoss,
 		},
 	})

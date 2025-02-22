@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/charmingruby/gdp/config"
-	"github.com/charmingruby/gdp/internal/network/udp"
-	"github.com/charmingruby/gdp/internal/shared/logger"
+	"github.com/charmingruby/gdp/internal/network/udp/client"
+	"github.com/charmingruby/gdp/pkg/logger"
 )
 
 func main() {
@@ -16,9 +16,10 @@ func main() {
 
 	clientCfg := cfg.Client
 
-	client := udp.NewClient(udp.ClientInput{
+	client := client.New(client.ClientInput{
 		ServerPort: clientCfg.ServerPort,
-		ClientThreshold: udp.ClientThreshold{
+		Config: client.ClientConfig{
+			PackageLoadSize:   clientCfg.PackageLoadSize,
 			TimeoutInSeconds:  clientCfg.ClientThreshold.TimeoutInSeconds,
 			InitialWindowSize: clientCfg.ClientThreshold.InitialWindowSize,
 			MaxWindowSize:     clientCfg.ClientThreshold.MaxWindowSize,

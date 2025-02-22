@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"github.com/charmingruby/gdp/internal/network/udp/shared/constant"
 )
 
 type Sync struct {
@@ -12,14 +14,7 @@ type Sync struct {
 }
 
 func SyncPacketSizeWithHeaders() int {
-	return sequentialIDSize + dataSize
-}
-
-func ExtractSyncPacketFromBuffer(buf []byte, totalBytes int) Sync {
-	return Sync{
-		SequentialID: binary.BigEndian.Uint32(buf[0:4]),
-		Data:         buf[4:totalBytes],
-	}
+	return constant.SEQUENTIAL_ID_SIZE + constant.DATA_SIZE
 }
 
 type SyncInput struct {

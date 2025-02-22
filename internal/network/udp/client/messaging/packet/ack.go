@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"github.com/charmingruby/gdp/internal/network/udp/shared/constant"
 )
 
 type Ack struct {
@@ -12,14 +14,7 @@ type Ack struct {
 }
 
 func AckPacketSizeWithHeaders() int {
-	return ackIDPacketSize + dataSize
-}
-
-func ExtractAckPacketFromBuffer(buf []byte, totalBytes int) Ack {
-	return Ack{
-		AckID: binary.BigEndian.Uint32(buf[0:4]),
-		Data:  buf[4:totalBytes],
-	}
+	return constant.ACK_ID_SIZE + constant.DATA_SIZE
 }
 
 type AckInput struct {
