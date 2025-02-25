@@ -12,8 +12,9 @@ const (
 )
 
 type Config struct {
-	Client ClientConfig `yaml:"client"`
-	Server ServerConfig `yaml:"server"`
+	CongestionControl CongestionControlConfig `yaml:"congestion-control"`
+	Client            ClientConfig            `yaml:"client"`
+	Server            ServerConfig            `yaml:"server"`
 }
 
 func New() (*Config, error) {

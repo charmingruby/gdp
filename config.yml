@@ -1,11 +1,8 @@
+congestion-control:
+  is-enabled: true
 client:
   server-port: 8080
   package-load-size: 10
-  client-thresholds:
-    timeout-in-seconds: 5
-    initial-window-size: 1
-    max-window-size: 20
-    initial-sshthresh: 16
 server:
   port: 8080
   congestion-thresholds:

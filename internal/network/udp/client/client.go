@@ -7,30 +7,24 @@ import (
 	"github.com/charmingruby/gdp/pkg/logger"
 )
 
-type ClientInput struct {
-	ServerPort int
-	Config     ClientConfig
-}
-
-type ClientConfig struct {
-	TimeoutInSeconds  int
-	InitialWindowSize int
-	MaxWindowSize     int
-	InitialSshthresh  int
-	PackageLoadSize   int
-}
-
 type Client struct {
 	Conn net.Conn
 
-	serverAddr string
-	config     ClientConfig
+	serverAddr      string
+	packageLoadSize int
+	allowedWindow   uint32
+}
+
+type ClientInput struct {
+	ServerPort      int
+	PackageLoadSize int
 }
 
 func New(in ClientInput) Client {
 	return Client{
-		serverAddr: fmt.Sprintf(":%d", in.ServerPort),
-		config:     in.Config,
+		serverAddr:      fmt.Sprintf(":%d", in.ServerPort),
+		packageLoadSize: in.PackageLoadSize,
+		allowedWindow:   0,
 	}
 }
 

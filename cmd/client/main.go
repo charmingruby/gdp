@@ -16,15 +16,11 @@ func main() {
 
 	clientCfg := cfg.Client
 
+	fmt.Printf("Client configuration: %+v\n", clientCfg)
+
 	client := client.New(client.ClientInput{
-		ServerPort: clientCfg.ServerPort,
-		Config: client.ClientConfig{
-			PackageLoadSize:   clientCfg.PackageLoadSize,
-			TimeoutInSeconds:  clientCfg.ClientThreshold.TimeoutInSeconds,
-			InitialWindowSize: clientCfg.ClientThreshold.InitialWindowSize,
-			MaxWindowSize:     clientCfg.ClientThreshold.MaxWindowSize,
-			InitialSshthresh:  clientCfg.ClientThreshold.InitialSshthresh,
-		},
+		ServerPort:      clientCfg.ServerPort,
+		PackageLoadSize: clientCfg.PackageLoadSize,
 	})
 
 	if err := client.Run(); err != nil {

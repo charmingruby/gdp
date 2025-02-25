@@ -5,3 +5,10 @@ func Response(content string) {
 	print(" -> ")
 	println(content)
 }
+
+func HighlightedErrorResponse(content string) {
+	highlight("%")
+	hightlightedErrResponse(" -> ")
+	hightlightedErrResponse(content)
+	println()
+}

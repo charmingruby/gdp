@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"math/rand/v2"
 
 	"github.com/charmingruby/gdp/internal/network/udp/server/messaging/extract"
 	"github.com/charmingruby/gdp/internal/network/udp/server/messaging/packet"
@@ -26,9 +27,12 @@ func (s *Server) receiveData(serverSequentialID, clientSequentialID uint32) {
 			fmt.Sprintf("received data packet with ack=%d, seqID=%d", dataAckPkt.AckID, dataAckPkt.SequentialID),
 		)
 
+		s.adjustWindowSize()
+
 		ackPkt := packet.Ack{
-			AckID: dataAckPkt.SequentialID + 1,
-			Data:  dataAckPkt.Data,
+			AckID:      dataAckPkt.SequentialID + 1,
+			Data:       dataAckPkt.Data,
+			WindowSize: s.windowSize,
 		}
 
 		if err := packet.DispatchAck(packet.AckInput{
@@ -41,10 +45,30 @@ func (s *Server) receiveData(serverSequentialID, clientSequentialID uint32) {
 		}
 
 		logger.Response(
-			fmt.Sprintf("sent ack packet with ack=%d", ackPkt.AckID),
+			fmt.Sprintf("sent ack packet with ack=%d, windowSize=%d", ackPkt.AckID, ackPkt.WindowSize),
 		)
 
 		currentServerSequentialID++
 		currentClientSequentialID++
 	}
+}
+
+func (s *Server) adjustWindowSize() {
+	randomLoss := 0.01 + rand.Float64()*(1.00-0.01)
+
+	if float64(s.congestionControl.PackageLoss) > randomLoss {
+		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Packet Loss Detected, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+		s.congestionControl.Sshthresh = s.congestionControl.Cwnd / 2
+		s.congestionControl.Cwnd = 1
+	} else if s.congestionControl.Cwnd < s.congestionControl.Sshthresh {
+		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Exponential Window Growth, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+		s.congestionControl.Cwnd *= 2
+	} else {
+		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Linear Window Growth, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+		s.congestionControl.Cwnd++
+	}
+
+	logger.HighlightedErrorResponse(fmt.Sprintf("error handled, new values: currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+
+	s.windowSize = s.congestionControl.Cwnd
 }

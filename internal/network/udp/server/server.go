@@ -18,9 +18,10 @@ type ServerInput struct {
 }
 
 type Server struct {
-	Conn       *net.UDPConn
-	addr       *net.UDPAddr
-	congestion congestion.Congestion
+	Conn              *net.UDPConn
+	addr              *net.UDPAddr
+	windowSize        uint32
+	congestionControl congestion.Congestion
 }
 
 func New(in ServerInput) (*Server, error) {
@@ -31,7 +32,12 @@ func New(in ServerInput) (*Server, error) {
 
 	return &Server{
 		addr:       addr,
-		congestion: congestion.Congestion(in.Threshold),
+		windowSize: 10,
+		congestionControl: congestion.Congestion{
+			PackageLoss: in.Threshold.PackageLoss,
+			Cwnd:        1,
+			Sshthresh:   16,
+		},
 	}, nil
 }
 
