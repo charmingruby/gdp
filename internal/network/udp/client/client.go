@@ -57,15 +57,23 @@ func (c *Client) Dispatch() error {
 	))
 
 	logger.CloseBracket()
-
 	logger.Divider()
 
 	logger.Header("Data Transfer Process")
 	logger.OpenBracket()
 
-	c.sendData(syncResult.serverSequentialID, syncResult.clientSequentialID)
+	currentClientSequentialID := c.sendData(syncResult.serverSequentialID, syncResult.clientSequentialID)
 
 	logger.CloseBracket()
+	logger.Divider()
 
+	logger.Header("Termination Process")
+	logger.OpenBracket()
+
+	if err := c.termination(currentClientSequentialID); err != nil {
+		logger.HighlightedErrorResponse(err.Error())
+	}
+
+	logger.CloseBracket()
 	return nil
 }

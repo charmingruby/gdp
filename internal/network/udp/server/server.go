@@ -13,13 +13,15 @@ type CongestionThreshold struct {
 }
 
 type ServerInput struct {
-	Port      int
-	Threshold CongestionThreshold
+	Port            int
+	PackageLoadSize int
+	Threshold       CongestionThreshold
 }
 
 type Server struct {
 	Conn              *net.UDPConn
 	addr              *net.UDPAddr
+	packageLoadSize   int
 	windowSize        uint32
 	congestionControl congestion.Congestion
 }
@@ -31,8 +33,9 @@ func New(in ServerInput) (*Server, error) {
 	}
 
 	return &Server{
-		addr:       addr,
-		windowSize: 10,
+		addr:            addr,
+		windowSize:      10,
+		packageLoadSize: in.PackageLoadSize,
 		congestionControl: congestion.Congestion{
 			PackageLoss: in.Threshold.PackageLoss,
 			Cwnd:        1,
@@ -70,13 +73,22 @@ func (s *Server) Read() error {
 	))
 
 	logger.CloseBracket()
-
 	logger.Divider()
 
 	logger.Header("Data Transfer Process")
 	logger.OpenBracket()
 
-	s.receiveData(syncResult.serverSequentialID, syncResult.clientSequentialID)
+	currentServerSequentialID := s.receiveData(syncResult.serverSequentialID, syncResult.clientSequentialID)
+
+	logger.CloseBracket()
+	logger.Divider()
+
+	logger.Header("Termination Process")
+	logger.OpenBracket()
+
+	if err := s.termination(currentServerSequentialID); err != nil {
+		logger.HighlightedErrorResponse(err.Error())
+	}
 
 	logger.CloseBracket()
 

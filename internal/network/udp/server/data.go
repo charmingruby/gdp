@@ -2,20 +2,25 @@ package server
 
 import (
 	"fmt"
-	"math/rand/v2"
 
 	"github.com/charmingruby/gdp/internal/network/udp/server/messaging/extract"
 	"github.com/charmingruby/gdp/internal/network/udp/server/messaging/packet"
+	"github.com/charmingruby/gdp/internal/network/udp/shared/analysis"
+	"github.com/charmingruby/gdp/internal/network/udp/shared/congestion"
 	"github.com/charmingruby/gdp/pkg/logger"
 )
 
-func (s *Server) receiveData(serverSequentialID, clientSequentialID uint32) {
-	var currentServerSequentialID uint32 = serverSequentialID + 1
-	var currentClientSequentialID uint32 = clientSequentialID + 1
+func (s *Server) receiveData(serverSequentialID, clientSequentialID uint32) uint32 {
+	var currentServerSequentialID uint32 = serverSequentialID
+	var currentClientSequentialID uint32 = clientSequentialID
+	var packagesReceived int = 0
+	var packagesLost int = 0
+	var retransmissionData []analysis.RetransmissionUnit
 
-	for {
+	for range s.packageLoadSize {
 		dataPktBuf := extract.NewDataAckBuffer()
 		totalBytes, clientAddr, err := s.Conn.ReadFromUDP(dataPktBuf)
+		packagesReceived++
 		if err != nil {
 			logger.Response(fmt.Sprintf("unable to read data packet from client: %s", err.Error()))
 			continue
@@ -27,7 +32,13 @@ func (s *Server) receiveData(serverSequentialID, clientSequentialID uint32) {
 			fmt.Sprintf("received data packet with ack=%d, seqID=%d", dataAckPkt.AckID, dataAckPkt.SequentialID),
 		)
 
-		s.adjustWindowSize()
+		packageLost := congestion.IsAPackageLossOccurence(s.congestionControl.PackageLoss)
+		if packageLost {
+			packagesLost++
+		}
+
+		retransmissionResult := s.adjustWindowSize(packageLost)
+		retransmissionData = append(retransmissionData, retransmissionResult)
 
 		ackPkt := packet.Ack{
 			AckID:      dataAckPkt.SequentialID + 1,
@@ -51,24 +62,74 @@ func (s *Server) receiveData(serverSequentialID, clientSequentialID uint32) {
 		currentServerSequentialID++
 		currentClientSequentialID++
 	}
-}
 
-func (s *Server) adjustWindowSize() {
-	randomLoss := 0.01 + rand.Float64()*(1.00-0.01)
-
-	if float64(s.congestionControl.PackageLoss) > randomLoss {
-		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Packet Loss Detected, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
-		s.congestionControl.Sshthresh = s.congestionControl.Cwnd / 2
-		s.congestionControl.Cwnd = 1
-	} else if s.congestionControl.Cwnd < s.congestionControl.Sshthresh {
-		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Exponential Window Growth, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
-		s.congestionControl.Cwnd *= 2
-	} else {
-		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Linear Window Growth, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
-		s.congestionControl.Cwnd++
+	if err := analysis.SaveRetransmissionData("./data/retransmission.json", retransmissionData); err != nil {
+		logger.HighlightedErrorResponse(fmt.Sprintf("unable to save retransmission data: %s", err.Error()))
 	}
 
-	logger.HighlightedErrorResponse(fmt.Sprintf("error handled, new values: currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+	if err := analysis.SavePackageLossData("./data/package-loss.json", analysis.PackageLossData{
+		PackagesReceived: packagesReceived,
+		PackagesLost:     packagesLost,
+	}); err != nil {
+		logger.HighlightedErrorResponse(fmt.Sprintf("unable to save package loss data: %s", err.Error()))
+	}
 
-	s.windowSize = s.congestionControl.Cwnd
+	return currentServerSequentialID
+}
+
+func (s *Server) adjustWindowSize(packageLost bool) analysis.RetransmissionUnit {
+	if packageLost {
+		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Packet Loss Detected, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+		currentCwnd := s.congestionControl.Cwnd
+		currentWindowSize := s.windowSize
+		currentSshthresh := s.congestionControl.Sshthresh
+
+		s.congestionControl.Sshthresh = s.congestionControl.Cwnd / 2
+		s.congestionControl.Cwnd = 1
+		s.windowSize = s.congestionControl.Cwnd
+
+		return analysis.RetransmissionUnit{
+			Type:             "Package Loss",
+			InitialRWND:      int(currentWindowSize),
+			FinalRWND:        int(s.windowSize),
+			InitialCWND:      int(currentCwnd),
+			FinalCWND:        int(s.congestionControl.Cwnd),
+			InitialSshthresh: int(currentSshthresh),
+			FinalSshthresh:   int(s.congestionControl.Sshthresh),
+		}
+	} else if s.congestionControl.Cwnd < s.congestionControl.Sshthresh {
+		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Exponential Window Growth, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+		currentCwnd := s.congestionControl.Cwnd
+		currentWindowSize := s.windowSize
+
+		s.congestionControl.Cwnd *= 2
+		s.windowSize = s.congestionControl.Cwnd
+
+		return analysis.RetransmissionUnit{
+			Type:             "Exponential Window Growth",
+			InitialRWND:      int(currentWindowSize),
+			FinalRWND:        int(s.windowSize),
+			InitialCWND:      int(currentCwnd),
+			FinalCWND:        int(s.congestionControl.Cwnd),
+			InitialSshthresh: int(s.congestionControl.Sshthresh),
+			FinalSshthresh:   int(s.congestionControl.Sshthresh),
+		}
+	} else {
+		logger.HighlightedErrorResponse(fmt.Sprintf("handling error: Linear Window Growth, currentWindowSize=%d, cwnd=%d, sshthresh=%d", s.windowSize, s.congestionControl.Cwnd, s.congestionControl.Sshthresh))
+		currentCwnd := s.congestionControl.Cwnd
+		currentWindowSize := s.windowSize
+
+		s.congestionControl.Cwnd++
+		s.windowSize = s.congestionControl.Cwnd
+
+		return analysis.RetransmissionUnit{
+			Type:             "Linear Window Growth",
+			InitialRWND:      int(currentWindowSize),
+			FinalRWND:        int(s.windowSize),
+			InitialCWND:      int(currentCwnd),
+			FinalCWND:        int(s.congestionControl.Cwnd),
+			InitialSshthresh: int(s.congestionControl.Sshthresh),
+			FinalSshthresh:   int(s.congestionControl.Sshthresh),
+		}
+	}
 }

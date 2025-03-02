@@ -40,7 +40,7 @@ func (c *Client) sync(baseSequentialID uint32) (syncResult, error) {
 	ackSyncPkt := extract.AckSyncPacketFromBuffer(ackSyncReceiverBuf)
 
 	logger.Response(
-		fmt.Sprintf("ack-sync packet received: ack=%d", ackSyncPkt.AckID),
+		fmt.Sprintf("ack-sync packet received: ack=%d, syn=%d", ackSyncPkt.AckID, ackSyncPkt.SequentialID),
 	)
 
 	ackPktBuf := make([]byte, packet.AckPacketSizeWithHeaders())

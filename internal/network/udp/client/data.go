@@ -8,9 +8,9 @@ import (
 	"github.com/charmingruby/gdp/pkg/logger"
 )
 
-func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) {
-	var currentServerSequentialID uint32 = serverSequentialID + 1
-	var currentClientSequentialID uint32 = clientSequentialID + 1
+func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) uint32 {
+	var currentServerSequentialID uint32 = serverSequentialID
+	var currentClientSequentialID uint32 = clientSequentialID
 
 	for range c.packageLoadSize {
 		ackPktBuf := make([]byte, packet.AckPacketSizeWithHeaders())
@@ -24,12 +24,12 @@ func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) {
 			Conn: c.Conn,
 			Pkt:  ackPkt,
 		}); err != nil {
-			logger.Response(fmt.Sprintf("unable to send last synchronization packet: %s", err.Error()))
+			logger.Response(fmt.Sprintf("unable to send data packet: %s", err.Error()))
 			continue
 		}
 
 		logger.Response(
-			fmt.Sprintf("sent data ack packet with ack=%d, seq=%d", ackPkt.AckID, ackPkt.SequentialID),
+			fmt.Sprintf("sent data packet with seq=%d", ackPkt.SequentialID),
 		)
 
 		ackBuf := extract.NewAckSyncBuffer()
@@ -51,4 +51,6 @@ func (c *Client) sendData(serverSequentialID, clientSequentialID uint32) {
 		currentServerSequentialID++
 		c.allowedWindow--
 	}
+
+	return currentClientSequentialID
 }

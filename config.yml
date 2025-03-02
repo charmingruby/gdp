@@ -2,8 +2,8 @@ congestion-control:
   is-enabled: true
 client:
   server-port: 8080
-  package-load-size: 10
+  package-load-size: 10000
 server:
   port: 8080
   congestion-thresholds:
-    package-loss: 0.1
+    package-loss: 0.2

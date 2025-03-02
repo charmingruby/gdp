@@ -19,7 +19,8 @@ func main() {
 	fmt.Printf("Client configuration: %+v\n", serverCfg)
 
 	server, err := server.New(server.ServerInput{
-		Port: serverCfg.Port,
+		Port:            serverCfg.Port,
+		PackageLoadSize: cfg.Client.PackageLoadSize,
 		Threshold: server.CongestionThreshold{
 			PackageLoss: serverCfg.CongestionThreshold.PackageLoss,
 		},
